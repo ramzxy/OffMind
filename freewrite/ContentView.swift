@@ -1,7 +1,7 @@
 // Swift 5.0
 //
 //  ContentView.swift
-//  freewrite
+//  OffMind
 //
 //  Created by thorfinn on 2/14/25.
 //
@@ -50,12 +50,7 @@ struct ContentView: View {
     
     @State private var isFullscreen = false
     @State private var selectedFont: String = "Lato-Regular"
-    @State private var currentRandomFont: String = ""
-    @State private var timeRemaining: Int = 900  // Changed to 900 seconds (15 minutes)
-    @State private var timerIsRunning = false
-    @State private var isHoveringTimer = false
     @State private var isHoveringFullscreen = false
-    @State private var hoveredFont: String? = nil
     @State private var isHoveringSize = false
     @State private var fontSize: CGFloat = 18
     @State private var blinkCount = 0
@@ -70,8 +65,6 @@ struct ContentView: View {
     @State private var selectedEntryId: UUID? = nil
     @State private var hoveredEntryId: UUID? = nil
     @State private var isHoveringChat = false  // Add this state variable
-    @State private var showingChatMenu = false
-    @State private var chatMenuAnchor: CGPoint = .zero
     @State private var showingSidebar = false  // Add this state variable
     @State private var hoveredTrashId: UUID? = nil
     @State private var hoveredExportId: UUID? = nil
@@ -79,18 +72,18 @@ struct ContentView: View {
     @State private var isHoveringNewEntry = false
     @State private var isHoveringClock = false
     @State private var isHoveringHistory = false
+    @State private var isHoveringQuit = false
     @State private var isHoveringHistoryText = false
     @State private var isHoveringHistoryPath = false
     @State private var isHoveringHistoryArrow = false
-    @State private var colorScheme: ColorScheme = .light // Add state for color scheme
+    @State private var colorScheme: ColorScheme = .dark // Add state for color scheme
     @State private var isHoveringThemeToggle = false // Add state for theme toggle hover
-    @State private var didCopyPrompt: Bool = false // Add state for copy prompt feedback
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     let entryHeight: CGFloat = 40
     
     let availableFonts = NSFontManager.shared.availableFontFamilies
     let standardFonts = ["Lato-Regular", "Arial", ".AppleSystemUIFont", "Times New Roman"]
-    let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26]
+    let fontSizes: [CGFloat] = [16, 18, 20, 22, 24, 26, 32, 36, 40]
     let placeholderOptions = [
         "\n\nBegin writing",
         "\n\nPick a thought and go",
@@ -108,13 +101,13 @@ struct ContentView: View {
     
     // Add cached documents directory
     private let documentsDirectory: URL = {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Freewrite")
+        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("OffMind")
         
-        // Create Freewrite directory if it doesn't exist
+        // Create OffMind directory if it doesn't exist
         if !FileManager.default.fileExists(atPath: directory.path) {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                print("Successfully created Freewrite directory")
+                print("Successfully created OffMind directory")
             } catch {
                 print("Error creating directory: \(error)")
             }
@@ -123,32 +116,6 @@ struct ContentView: View {
         return directory
     }()
     
-    // Add shared prompt constant
-    private let aiChatPrompt = """
-    below is my journal entry. wyt? talk through it with me like a friend. don't therpaize me and give me a whole breakdown, don't repeat my thoughts with headings. really take all of this, and tell me back stuff truly as if you're an old homie.
-    
-    Keep it casual, dont say yo, help me make new connections i don't see, comfort, validate, challenge, all of it. dont be afraid to say a lot. format with markdown headings if needed.
-
-    do not just go through every single thing i say, and say it back to me. you need to proccess everythikng is say, make connections i don't see it, and deliver it all back to me as a story that makes me feel what you think i wanna feel. thats what the best therapists do.
-
-    ideally, you're style/tone should sound like the user themselves. it's as if the user is hearing their own tone but it should still feel different, because you have different things to say and don't just repeat back they say.
-
-    else, start by saying, "hey, thanks for showing me this. my thoughts:"
-        
-    my entry:
-    """
-    
-    private let claudePrompt = """
-    Take a look at my journal entry below. I'd like you to analyze it and respond with deep insight that feels personal, not clinical.
-    Imagine you're not just a friend, but a mentor who truly gets both my tech background and my psychological patterns. I want you to uncover the deeper meaning and emotional undercurrents behind my scattered thoughts.
-    Keep it casual, dont say yo, help me make new connections i don't see, comfort, validate, challenge, all of it. dont be afraid to say a lot. format with markdown headings if needed.
-    Use vivid metaphors and powerful imagery to help me see what I'm really building. Organize your thoughts with meaningful headings that create a narrative journey through my ideas.
-    Don't just validate my thoughts - reframe them in a way that shows me what I'm really seeking beneath the surface. Go beyond the product concepts to the emotional core of what I'm trying to solve.
-    Be willing to be profound and philosophical without sounding like you're giving therapy. I want someone who can see the patterns I can't see myself and articulate them in a way that feels like an epiphany.
-    Start with 'hey, thanks for showing me this. my thoughts:' and then use markdown headings to structure your response.
-
-    Here's my journal entry:
-    """
     
     // Initialize with saved theme preference if available
     init() {
@@ -292,7 +259,7 @@ struct ContentView: View {
             }
             
             // Check if we have only one entry and it's the welcome message
-            let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to Freewrite.") == true
+            let hasOnlyWelcomeEntry = entries.count == 1 && entriesWithDates.first?.content.contains("Welcome to OffMind.") == true
             
             if entries.isEmpty {
                 // First time user - create entry with welcome message
@@ -337,26 +304,7 @@ struct ContentView: View {
         }
     }
     
-    var randomButtonTitle: String {
-        return currentRandomFont.isEmpty ? "Random" : "Random [\(currentRandomFont)]"
-    }
     
-    var timerButtonTitle: String {
-        if !timerIsRunning && timeRemaining == 900 {
-            return "15:00"
-        }
-        let minutes = timeRemaining / 60
-        let seconds = timeRemaining % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-    
-    var timerColor: Color {
-        if timerIsRunning {
-            return isHoveringTimer ? (colorScheme == .light ? .black : .white) : .gray.opacity(0.8)
-        } else {
-            return isHoveringTimer ? (colorScheme == .light ? .black : .white) : (colorScheme == .light ? .gray : .gray.opacity(0.8))
-        }
-    }
     
     var lineHeight: CGFloat {
         let font = NSFont(name: selectedFont, size: fontSize) ?? .systemFont(ofSize: fontSize)
@@ -414,7 +362,7 @@ struct ContentView: View {
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.never)
                     .lineSpacing(lineHeight)
-                    .frame(maxWidth: 650)
+                    .frame(maxWidth: 750)
                     
           
                     .id("\(selectedFont)-\(fontSize)-\(colorScheme)")
@@ -449,7 +397,6 @@ struct ContentView: View {
                 VStack {
                     Spacer()
                     HStack {
-                        // Font buttons (moved to left)
                         HStack(spacing: 8) {
                             Button(fontSizeButtonTitle) {
                                 if let currentIndex = fontSizes.firstIndex(of: fontSize) {
@@ -469,102 +416,6 @@ struct ContentView: View {
                                 }
                             }
                             
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button("Lato") {
-                                selectedFont = "Lato-Regular"
-                                currentRandomFont = ""
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(hoveredFont == "Lato" ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                hoveredFont = hovering ? "Lato" : nil
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button("Arial") {
-                                selectedFont = "Arial"
-                                currentRandomFont = ""
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(hoveredFont == "Arial" ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                hoveredFont = hovering ? "Arial" : nil
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button("System") {
-                                selectedFont = ".AppleSystemUIFont"
-                                currentRandomFont = ""
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(hoveredFont == "System" ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                hoveredFont = hovering ? "System" : nil
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button("Serif") {
-                                selectedFont = "Times New Roman"
-                                currentRandomFont = ""
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(hoveredFont == "Serif" ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                hoveredFont = hovering ? "Serif" : nil
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button(randomButtonTitle) {
-                                if let randomFont = availableFonts.randomElement() {
-                                    selectedFont = randomFont
-                                    currentRandomFont = randomFont
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(hoveredFont == "Random" ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                hoveredFont = hovering ? "Random" : nil
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
                         }
                         .padding(8)
                         .cornerRadius(6)
@@ -576,201 +427,18 @@ struct ContentView: View {
                         
                         // Utility buttons (moved to right)
                         HStack(spacing: 8) {
-                            Button(timerButtonTitle) {
-                                let now = Date()
-                                if let lastClick = lastClickTime,
-                                   now.timeIntervalSince(lastClick) < 0.3 {
-                                    timeRemaining = 900
-                                    timerIsRunning = false
-                                    lastClickTime = nil
-                                } else {
-                                    timerIsRunning.toggle()
-                                    lastClickTime = now
-                                }
+                            Button("Quit") {
+                                NSApplication.shared.terminate(nil)
                             }
                             .buttonStyle(.plain)
-                            .foregroundColor(timerColor)
+                            .foregroundColor(isHoveringQuit ? textHoverColor : textColor)
                             .onHover { hovering in
-                                isHoveringTimer = hovering
+                                isHoveringQuit = hovering
                                 isHoveringBottomNav = hovering
                                 if hovering {
                                     NSCursor.pointingHand.push()
                                 } else {
                                     NSCursor.pop()
-                                }
-                            }
-                            .onAppear {
-                                NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-                                    if isHoveringTimer {
-                                        let scrollBuffer = event.deltaY * 0.25
-                                        
-                                        if abs(scrollBuffer) >= 0.1 {
-                                            let currentMinutes = timeRemaining / 60
-                                            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-                                            let direction = -scrollBuffer > 0 ? 5 : -5
-                                            let newMinutes = currentMinutes + direction
-                                            let roundedMinutes = (newMinutes / 5) * 5
-                                            let newTime = roundedMinutes * 60
-                                            timeRemaining = min(max(newTime, 0), 2700)
-                                        }
-                                    }
-                                    return event
-                                }
-                            }
-                            
-                            Text("•")
-                                .foregroundColor(.gray)
-                            
-                            Button("Chat") {
-                                showingChatMenu = true
-                                // Ensure didCopyPrompt is reset when opening the menu
-                                didCopyPrompt = false
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(isHoveringChat ? textHoverColor : textColor)
-                            .onHover { hovering in
-                                isHoveringChat = hovering
-                                isHoveringBottomNav = hovering
-                                if hovering {
-                                    NSCursor.pointingHand.push()
-                                } else {
-                                    NSCursor.pop()
-                                }
-                            }
-                            .popover(isPresented: $showingChatMenu, attachmentAnchor: .point(UnitPoint(x: 0.5, y: 0)), arrowEdge: .top) {
-                                VStack(spacing: 0) { // Wrap everything in a VStack for consistent styling and onChange
-                                    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    
-                                    // Calculate potential URL lengths
-                                    let gptFullText = aiChatPrompt + "\n\n" + trimmedText
-                                    let claudeFullText = claudePrompt + "\n\n" + trimmedText
-                                    let encodedGptText = gptFullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                    let encodedClaudeText = claudeFullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                    
-                                    let gptUrlLength = "https://chat.openai.com/?m=".count + encodedGptText.count
-                                    let claudeUrlLength = "https://claude.ai/new?q=".count + encodedClaudeText.count
-                                    let isUrlTooLong = gptUrlLength > 6000 || claudeUrlLength > 6000
-                                    
-                                    if isUrlTooLong {
-                                        // View for long text (URL too long)
-                                        Text("Hey, your entry is long. It'll break the URL. Instead, copy prompt by clicking below and paste into AI of your choice!")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(popoverTextColor)
-                                            .lineLimit(nil)
-                                            .multilineTextAlignment(.leading)
-                                            .frame(width: 200, alignment: .leading)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                        
-                                        Divider()
-                                        
-                                        Button(action: {
-                                            copyPromptToClipboard()
-                                            didCopyPrompt = true
-                                        }) {
-                                            Text(didCopyPrompt ? "Copied!" : "Copy Prompt")
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(popoverTextColor)
-                                        .onHover { hovering in
-                                            if hovering {
-                                                NSCursor.pointingHand.push()
-                                            } else {
-                                                NSCursor.pop()
-                                            }
-                                        }
-                                        
-                                    } else if text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("hi. my name is farza.") {
-                                        Text("Yo. Sorry, you can't chat with the guide lol. Please write your own entry.")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(popoverTextColor)
-                                            .frame(width: 250)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                    } else if text.count < 350 {
-                                        Text("Please free write for at minimum 5 minutes first. Then click this. Trust.")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(popoverTextColor)
-                                            .frame(width: 250)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 8)
-                                    } else {
-                                        // View for normal text length
-                                        Button(action: {
-                                            showingChatMenu = false
-                                            openChatGPT()
-                                        }) {
-                                            Text("ChatGPT")
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(popoverTextColor)
-                                        .onHover { hovering in
-                                            if hovering {
-                                                NSCursor.pointingHand.push()
-                                            } else {
-                                                NSCursor.pop()
-                                            }
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button(action: {
-                                            showingChatMenu = false
-                                            openClaude()
-                                        }) {
-                                            Text("Claude")
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(popoverTextColor)
-                                        .onHover { hovering in
-                                            if hovering {
-                                                NSCursor.pointingHand.push()
-                                            } else {
-                                                NSCursor.pop()
-                                            }
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button(action: {
-                                            // Don't dismiss menu, just copy and update state
-                                            copyPromptToClipboard()
-                                            didCopyPrompt = true
-                                        }) {
-                                            Text(didCopyPrompt ? "Copied!" : "Copy Prompt")
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .foregroundColor(popoverTextColor)
-                                        .onHover { hovering in
-                                            if hovering {
-                                                NSCursor.pointingHand.push()
-                                            } else {
-                                                NSCursor.pop()
-                                            }
-                                        }
-                                    }
-                                }
-                                .frame(minWidth: 120, maxWidth: 250) // Allow width to adjust
-                                .background(popoverBackgroundColor)
-                                .cornerRadius(8)
-                                .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
-                                // Reset copied state when popover dismisses
-                                .onChange(of: showingChatMenu) { newValue in
-                                    if !newValue {
-                                        didCopyPrompt = false
-                                    }
                                 }
                             }
                             
@@ -876,7 +544,7 @@ struct ContentView: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 bottomNavOpacity = 1.0
                             }
-                        } else if timerIsRunning {
+                        } else if false {
                             withAnimation(.easeIn(duration: 1.0)) {
                                 bottomNavOpacity = 0.0
                             }
@@ -1047,18 +715,7 @@ struct ContentView: View {
                 saveEntry(entry: currentEntry)
             }
         }
-        .onReceive(timer) { _ in
-            if timerIsRunning && timeRemaining > 0 {
-                timeRemaining -= 1
-            } else if timeRemaining == 0 {
-                timerIsRunning = false
-                if !isHoveringBottomNav {
-                    withAnimation(.easeOut(duration: 1.0)) {
-                        bottomNavOpacity = 1.0
-                    }
-                }
-            }
-        }
+
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willEnterFullScreenNotification)) { _ in
             isFullscreen = true
         }
@@ -1150,35 +807,6 @@ struct ContentView: View {
         }
     }
     
-    private func openChatGPT() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fullText = aiChatPrompt + "\n\n" + trimmedText
-        
-        if let encodedText = fullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let url = URL(string: "https://chat.openai.com/?m=" + encodedText) {
-            NSWorkspace.shared.open(url)
-        }
-    }
-    
-    private func openClaude() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fullText = claudePrompt + "\n\n" + trimmedText
-        
-        if let encodedText = fullText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-           let url = URL(string: "https://claude.ai/new?q=" + encodedText) {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    private func copyPromptToClipboard() {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fullText = aiChatPrompt + "\n\n" + trimmedText
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(fullText, forType: .string)
-        print("Prompt copied to clipboard")
-    }
     
     private func deleteEntry(entry: HumanEntry) {
         // Delete the file from the filesystem

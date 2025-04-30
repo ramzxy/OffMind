@@ -8,9 +8,9 @@
 import SwiftUI
 
 @main
-struct freewriteApp: App {
+struct OffMindApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @AppStorage("colorScheme") private var colorSchemeString: String = "light"
+    @AppStorage("colorScheme") private var colorSchemeString: String = "dark"
     
     init() {
         // Register Lato font
